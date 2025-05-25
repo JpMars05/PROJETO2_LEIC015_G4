@@ -35,21 +35,23 @@ vector<int> bestCombination;
 * @param currentCombination A vector of integers that represents the combination of pallets IDs that were selected.
 *
 * @note Time Complexity: O(2^n), where n is the number of pallets.
+* In case of multiple combinations with the same profit and weight, the one with fewer pallets is chosen.
 */
 
 void backtrack(const vector<pallet>& pallets, int index, int currentWeight, int currentProfit, int maxWeight, vector<int>& currentCombination) {
 
     if (index == pallets.size()) {
-        // Verifica se é melhor solução válida
-        if (currentWeight <= maxWeight && currentProfit > bestProfit) {
-            bestProfit = currentProfit;
-            bestWeight = currentWeight;
-            bestCombination = currentCombination;
+        if (currentWeight <= maxWeight) {
+            if (currentProfit > bestProfit ||
+                (currentProfit == bestProfit && currentCombination.size() < bestCombination.size())) {
+                bestProfit = currentProfit;
+                bestWeight = currentWeight;
+                bestCombination = currentCombination;
+                }
         }
         return;
     }
 
-    // Escolher a palete atual (se couber)
     if (currentWeight + pallets[index].weight <= maxWeight) {
         currentCombination.push_back(pallets[index].id);
         backtrack(pallets, index + 1,
@@ -57,10 +59,9 @@ void backtrack(const vector<pallet>& pallets, int index, int currentWeight, int 
                   currentProfit + pallets[index].profit,
                   maxWeight,
                   currentCombination);
-        currentCombination.pop_back(); // backtrack
+        currentCombination.pop_back();
     }
 
-    // Ignorar a palete atual
     backtrack(pallets, index + 1, currentWeight, currentProfit, maxWeight, currentCombination);
 }
 
@@ -69,6 +70,7 @@ void backtrack(const vector<pallet>& pallets, int index, int currentWeight, int 
 * @param pallets A vector of pallet's structure containing the pallets of a certain file.
 * @param maxWeight Integer that represents the maximum weight allowed on a certain truck.
 * @note Time Complexity: O(2^n), where n is the total number of pallets.
+* @note Space Complexity: O(n), because of the recursion depth and the forward storage on the currentCombination vector.
 */
 
 void backtrackingKnapsack(const vector<pallet>& pallets, int maxWeight) {
@@ -96,53 +98,55 @@ void backtrackingKnapsack(const vector<pallet>& pallets, int maxWeight) {
 * @param pallets A vector of pallet's structure that conatins the pallets available for the algorithm.-
 * @param maxWeight Integer that represents the maximum weight allowed on a certain truck.
 * @note Time Complexity: O(n*W), where n is the number of pallets available and W is the maximum allowed weight.
+* @note Space Complexity: O(n*W), due to the count tables.
 */
 
 void dynamicProgrammingKnapsack(const vector<pallet>& pallets, int maxWeight) {
     auto start = std::chrono::high_resolution_clock::now();
-    int n = pallets.size(); // Número de paletes disponíveis
+    int n = pallets.size();
 
-    // Cria uma tabela DP com n+1 linhas e maxWeight+1 colunas, inicializada a zero.
-    // dp[i][j] representa o lucro máximo usando as primeiras i paletes com capacidade j.
     vector<vector<int>> dp(n + 1, vector<int>(maxWeight + 1, 0));
+    vector<vector<int>> cnt(n + 1, vector<int>(maxWeight + 1, 0));
 
-    // Preenche a tabela DP de forma iterativa
     for (int i = 1; i <= n; ++i) {
-        int w = pallets[i - 1].weight; // Peso da palete atual
-        int p = pallets[i - 1].profit; // Lucro da palete atual
+        int w = pallets[i - 1].weight;
+        int p = pallets[i - 1].profit;
 
         for (int j = 0; j <= maxWeight; ++j) {
-            // Se a palete atual couber na capacidade j
-            if (w <= j) {
-                // Escolhe o melhor entre: não usar esta palete (dp[i-1][j])
-                // ou usar esta palete (dp[i-1][j-w] + lucro desta palete)
-                dp[i][j] = max(dp[i - 1][j], dp[i - 1][j - w] + p);
-            } else {
-                // Não dá para usar esta palete, então copia o valor de cima
-                dp[i][j] = dp[i - 1][j];
-            }
+             int bestProfit = dp[i - 1][j];
+             int bestCount  = cnt[i - 1][j];
+
+             if (w <= j) {
+                 int pickProfit = dp[i - 1][j - w] + p;
+                 int pickCount  = cnt[i - 1][j - w] + 1;
+
+                 if (pickProfit > bestProfit ||
+                    (pickProfit == bestProfit && pickCount < bestCount)) {
+                     bestProfit = pickProfit;
+                     bestCount  = pickCount;
+                 }
+             }
+
+             dp[i][j]  = bestProfit;
+             cnt[i][j] = bestCount;
         }
     }
 
-    // Recupera o lucro máximo total a partir da última célula da tabela
-    int res = dp[n][maxWeight];
-    int w = maxWeight; // Capacidade restante
-    vector<int> selected; // IDs das paletes escolhidas
+    int w = maxWeight;
+    vector<int> selected;
 
-    // Percorre a tabela de trás para a frente para descobrir quais paletes foram escolhidas
-    for (int i = n; i > 0 && res > 0; --i) {
-        // Se o valor mudou ao passar de dp[i][w] para dp[i-1][w],
-        // isso significa que esta palete foi incluída na solução ótima
-        if (res != dp[i - 1][w]) {
-            selected.push_back(pallets[i - 1].id);         // Guarda o ID da palete
-            res -= pallets[i - 1].profit;                  // Subtrai o lucro da palete escolhida
-            w -= pallets[i - 1].weight;                    // Subtrai o peso da palete
-        }
+    for (int i = n; i > 0; --i) {
+      if (dp[i][w] == dp[i - 1][w] && cnt[i][w] == cnt[i - 1][w]) {
+
+      } else {
+        selected.push_back(pallets[i - 1].id);
+        w -= pallets[i - 1].weight;
+      }
     }
+
     auto end = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double, std::milli> duration = end - start;
 
-    // Imprime os resultados finais
     cout << "Best combination (Dynamic Programming):" << endl;
     cout << "Pallets: ";
     for (int id : selected) cout << id << " ";
@@ -156,13 +160,13 @@ void dynamicProgrammingKnapsack(const vector<pallet>& pallets, int maxWeight) {
 * @param pallets A vector of pallet's structure that contains the pallets available for the algorithm.
 * @param maxWeight Integer that represents the maximum allowed weight on a certain truck.
 * @note Time Complexity: O(n log n), where n is the number of available pallets.
+* @note Space Complexity: O(n), due to the sort function and the forward storage on the currentCombination vector.
 */
 
 void greedyKnapsack(const vector<pallet>& pallets, int maxWeight) {
     auto start = std::chrono::high_resolution_clock::now();
     vector<pallet> sortedPallets = pallets;
 
-    // Ordena pela divisão entre lucro e peso de cada um, por ordem decrescente
     sort(sortedPallets.begin(), sortedPallets.end(), [](const pallet& a, const pallet& b) {
           double ratioA = static_cast<double>(a.profit) / a.weight;
           double ratioB = static_cast<double>(b.profit) / b.weight;
@@ -172,7 +176,6 @@ void greedyKnapsack(const vector<pallet>& pallets, int maxWeight) {
     int totalProfit = 0;
     vector<int> currentCombination;
 
-    // Adiciona-se paletes ao vetor enquanto não ultrapassa a capacidade total
     for(const auto& p : sortedPallets) {
         if(currentWeight + p.weight <= maxWeight) {
             currentWeight+=p.weight;
@@ -196,13 +199,13 @@ void greedyKnapsack(const vector<pallet>& pallets, int maxWeight) {
 * @param pallets A vector of pallet's structure that contains the pallets available for the algorithm.
 * @param maxWeight Integer that represents the maximum allowed weight on a certain truck.
 * @note Time Complexity: O(n log n + k * n^2), where n is the number of available pallets and k the number of successful improvements.
+* @note Space Complexity: O(n), because of the sort function and forward storage on the currentCombination vector.
 */
 
 void greedyPlusLocalSearchKnapsack(const vector<pallet>& pallets, int maxWeight) {
     auto start = std::chrono::high_resolution_clock::now();
     vector<pallet> sortedPallets = pallets;
 
-    // Ordena pela divisão entre lucro e peso de cada um, por ordem decrescente
     sort(sortedPallets.begin(), sortedPallets.end(), [](const pallet& a, const pallet& b) {
           double ratioA = static_cast<double>(a.profit) / a.weight;
           double ratioB = static_cast<double>(b.profit) / b.weight;
@@ -212,7 +215,6 @@ void greedyPlusLocalSearchKnapsack(const vector<pallet>& pallets, int maxWeight)
     int totalProfit = 0;
     vector<int> currentCombination;
 
-    // Adiciona-se paletes ao vetor enquanto não ultrapassa a capacidade total
     for(const auto& p : sortedPallets) {
         if(currentWeight + p.weight <= maxWeight) {
             currentWeight+=p.weight;
@@ -221,7 +223,6 @@ void greedyPlusLocalSearchKnapsack(const vector<pallet>& pallets, int maxWeight)
         }
     }
 
-    // ------------------ LOCAL SEARCH ------------------
     bool improved = true;
     while (improved) {
         improved = false;
@@ -242,7 +243,7 @@ void greedyPlusLocalSearchKnapsack(const vector<pallet>& pallets, int maxWeight)
                     totalProfit = newProfit;
                     currentCombination[i] = out.id;
                     improved = true;
-                    break; // Recomeça a pesquisa após troca
+                    break;
                 }
             }
 
@@ -265,6 +266,12 @@ void greedyPlusLocalSearchKnapsack(const vector<pallet>& pallets, int maxWeight)
 * @brief Function that contains a Hybrid Aprroach for the 0/1 Knapsack Problem that chooses the best strategy to solve the problem.
 * @param pallets A vector of pallet's structure that contains the pallets available for the algorithm.
 * @param maxWeight Integer that represents the maximum allowed weight on a certain truck.
+* @note Time Complexity: Depends on the chosen strategy:
+*        -O(n*W) for Dynamic Programming (if pallets <=20);
+*        -O(n log n + k * n^2) for Greedy + Local Search (if pallets > 20).
+* @note Space Complexity: Depends on the chosen strategy:
+*        -O(n*W) for Dynamic Programming (if pallets <=20);
+*        -O(n) for Greedy + Local Search (if pallets > 20).
 */
 
 void hybridKnapsack(const std::vector<pallet>& pallets, int maxWeight) {
